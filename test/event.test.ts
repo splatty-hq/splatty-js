@@ -54,10 +54,17 @@ test("buildMessageEvent builds an info message", () => {
   assert.equal(event.exception, undefined);
 });
 
-test("Configuration.validate requires dsn", () => {
-  const c = new Configuration({ url: "https://x.test" });
+test("Configuration.validate disables when dsn missing", () => {
+  const c = new Configuration({ url: "https://x.test", logger: { warn: () => {} } });
   c.dsn = undefined;
-  assert.throws(() => c.validate(), /dsn is required/);
+  c.validate();
+  assert.equal(c.isEnabled(), false);
+});
+
+test("Configuration.validate disables when url invalid", () => {
+  const c = new Configuration({ url: "not-a-url", dsn: "k", logger: { warn: () => {} } });
+  c.validate();
+  assert.equal(c.isEnabled(), false);
 });
 
 test("Configuration.envelopeUrl strips trailing slash", () => {

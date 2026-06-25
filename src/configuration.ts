@@ -60,16 +60,26 @@ export class Configuration {
 
   validate(): void {
     if (!this.enabled) return;
-    if (!this.url) throw new MissingConfigError("config.url is required");
-    if (!this.dsn) throw new MissingConfigError("config.dsn is required");
+    if (!this.url) return this.disable("config.url is required");
+    if (!this.dsn) return this.disable("config.dsn is required");
     let parsed: URL;
     try {
       parsed = new URL(this.url);
     } catch (e) {
-      throw new InvalidDsnError((e as Error).message);
+      return this.disable(`config.url is invalid: ${(e as Error).message}`);
     }
     if (!parsed.host) {
-      throw new InvalidDsnError("config.url must include scheme + host");
+      return this.disable("config.url must include scheme + host");
+    }
+  }
+
+  private disable(message: string): void {
+    this.enabled = false;
+    const full = `[Splatty] disabled: ${message}`;
+    if (this.logger) {
+      this.logger.warn(full);
+    } else {
+      console.warn(full);
     }
   }
 
