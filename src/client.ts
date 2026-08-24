@@ -1,22 +1,23 @@
-import { Configuration } from "./configuration";
-import { Transport } from "./transport";
-import { buildExceptionEvent, buildMessageEvent } from "./event";
-import type { Scope } from "./types";
+import { Configuration } from "./configuration.js";
+import { Transport } from "./transport.js";
+import { Scrubber } from "./scrubber.js";
+import { buildExceptionEvent, buildMessageEvent } from "./event.js";
+import type { EventPayload, Scope } from "./types.js";
 
 export class Client {
   readonly configuration: Configuration;
   readonly transport: Transport;
+  private readonly scrubber: Scrubber;
 
   constructor(configuration: Configuration) {
     this.configuration = configuration;
     this.transport = new Transport(configuration);
+    this.scrubber = new Scrubber(configuration);
   }
 
   async captureException(err: unknown, scope: Scope = {}): Promise<string | null> {
-    let event = buildExceptionEvent(err, this.configuration, scope);
-    const filtered = this.filter(event);
-    if (!filtered) return null;
-    event = filtered;
+    const event = this.process(buildExceptionEvent(err, this.configuration, scope));
+    if (!event) return null;
     await this.transport.sendEnvelope(event);
     return event.event_id;
   }
@@ -26,10 +27,10 @@ export class Client {
     options: { level?: string; scope?: Scope } = {},
   ): Promise<string | null> {
     const { level = "info", scope = {} } = options;
-    let event = buildMessageEvent(message, this.configuration, level, scope);
-    const filtered = this.filter(event);
-    if (!filtered) return null;
-    event = filtered;
+    const event = this.process(
+      buildMessageEvent(message, this.configuration, level, scope),
+    );
+    if (!event) return null;
     await this.transport.sendEnvelope(event);
     return event.event_id;
   }
@@ -38,7 +39,11 @@ export class Client {
     this.transport.close();
   }
 
-  private filter(event: ReturnType<typeof buildExceptionEvent>) {
+  private process(event: EventPayload): EventPayload | null {
+    return this.filter(this.scrubber.scrub(event));
+  }
+
+  private filter(event: EventPayload): EventPayload | null {
     const hook = this.configuration.beforeSend;
     if (!hook) return event;
     return hook(event) ?? null;

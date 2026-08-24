@@ -2,7 +2,12 @@
   "name": "splatty",
   "version": "0.1.0",
   "description": "JavaScript/TypeScript client for Splatty. Captures exceptions and logs and ships them over the envelope protocol.",
-  "keywords": ["splatty", "error-tracking", "logging", "observability"],
+  "keywords": [
+    "splatty",
+    "error-tracking",
+    "logging",
+    "observability"
+  ],
   "license": "MIT",
   "author": "k0va1",
   "repository": {
@@ -10,18 +15,54 @@
     "url": "https://github.com/k0va1/splatty-js.git"
   },
   "main": "dist/index.js",
-  "module": "dist/index.mjs",
+  "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
+      "import": "./dist/esm/index.js",
       "require": "./dist/index.js"
-    }
+    },
+    "./express": {
+      "types": "./dist/express.d.ts",
+      "import": "./dist/esm/express.js",
+      "require": "./dist/express.js"
+    },
+    "./pino": {
+      "types": "./dist/pino.d.ts",
+      "import": "./dist/esm/pino.js",
+      "require": "./dist/pino.js"
+    },
+    "./winston": {
+      "types": "./dist/winston.d.ts",
+      "import": "./dist/esm/winston.js",
+      "require": "./dist/winston.js"
+    },
+    "./bullmq": {
+      "types": "./dist/bullmq.d.ts",
+      "import": "./dist/esm/bullmq.js",
+      "require": "./dist/bullmq.js"
+    },
+    "./console": {
+      "types": "./dist/console.d.ts",
+      "import": "./dist/esm/console.js",
+      "require": "./dist/console.js"
+    },
+    "./process": {
+      "types": "./dist/process.d.ts",
+      "import": "./dist/esm/process.js",
+      "require": "./dist/process.js"
+    },
+    "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.esm.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.esm.json && node scripts/esm-package.mjs",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

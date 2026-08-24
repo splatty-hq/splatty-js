@@ -1,4 +1,4 @@
-import type { EventPayload } from "./types";
+import type { EventPayload } from "./types.js";
 
 export interface ConfigurationOptions {
   url?: string;
@@ -6,6 +6,14 @@ export interface ConfigurationOptions {
   environment?: string;
   release?: string;
   enabled?: boolean;
+  /** Ship logs through the batching appender (mirrors Ruby's `config.logs`). */
+  logs?: boolean;
+  /** Patch the global `console` so its output is forwarded as logs. */
+  captureConsole?: boolean;
+  /** Install `uncaughtException` / `unhandledRejection` handlers on `process`. */
+  captureUnhandled?: boolean;
+  /** Send request headers verbatim instead of filtering the sensitive ones. */
+  sendDefaultPii?: boolean;
   serverName?: string;
   openTimeoutMs?: number;
   readTimeoutMs?: number;
@@ -27,7 +35,7 @@ export class MissingConfigError extends Error {
   }
 }
 
-export const DEFAULT_URL = "https://splatty.k0va1.dev";
+export const DEFAULT_URL = "https://splatty.app";
 
 export class Configuration {
   url: string;
@@ -35,6 +43,10 @@ export class Configuration {
   environment: string;
   release: string | undefined;
   enabled: boolean;
+  logs: boolean;
+  captureConsole: boolean;
+  captureUnhandled: boolean;
+  sendDefaultPii: boolean;
   serverName: string | undefined;
   openTimeoutMs: number;
   readTimeoutMs: number;
@@ -51,6 +63,10 @@ export class Configuration {
       "development";
     this.release = options.release ?? process.env.SPLATTY_RELEASE;
     this.enabled = options.enabled ?? true;
+    this.logs = options.logs ?? true;
+    this.captureConsole = options.captureConsole ?? false;
+    this.captureUnhandled = options.captureUnhandled ?? false;
+    this.sendDefaultPii = options.sendDefaultPii ?? false;
     this.serverName = options.serverName;
     this.openTimeoutMs = options.openTimeoutMs ?? 5_000;
     this.readTimeoutMs = options.readTimeoutMs ?? 10_000;
@@ -73,7 +89,7 @@ export class Configuration {
     }
   }
 
-  private disable(message: string): void {
+  disable(message: string): void {
     this.enabled = false;
     const full = `[Splatty] disabled: ${message}`;
     if (this.logger) {

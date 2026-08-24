@@ -1,9 +1,9 @@
 import { hostname } from "node:os";
 import { randomBytes } from "node:crypto";
-import { SDK_NAME } from "./transport";
-import { VERSION } from "./version";
-import type { Configuration } from "./configuration";
-import type { EventPayload, Scope, StackFrame, ExceptionValue } from "./types";
+import { SDK_NAME } from "./transport.js";
+import { VERSION } from "./version.js";
+import type { Configuration } from "./configuration.js";
+import type { EventPayload, Scope, StackFrame, ExceptionValue } from "./types.js";
 
 const APP_ROOT = process.cwd();
 const APP_ROOT_PREFIXES = ["/app/", `${APP_ROOT}/`];
@@ -56,6 +56,20 @@ function exceptionValue(err: Error): ExceptionValue {
   };
 }
 
+function nonErrorValue(current: unknown): ExceptionValue {
+  let value: string;
+  if (typeof current === "string") {
+    value = current;
+  } else {
+    try {
+      value = JSON.stringify(current) ?? String(current);
+    } catch {
+      value = String(current);
+    }
+  }
+  return { type: "NonError", value, stacktrace: { frames: [] } };
+}
+
 function exceptionChain(err: unknown): ExceptionValue[] {
   const chain: ExceptionValue[] = [];
   const seen = new Set<unknown>();
@@ -66,18 +80,17 @@ function exceptionChain(err: unknown): ExceptionValue[] {
       chain.unshift(exceptionValue(current));
       current = (current as Error & { cause?: unknown }).cause;
     } else {
-      chain.unshift({
-        type: "NonError",
-        value: typeof current === "string" ? current : JSON.stringify(current),
-        stacktrace: { frames: [] },
-      });
+      chain.unshift(nonErrorValue(current));
       break;
     }
   }
   return chain;
 }
 
-function basePayload(configuration: Configuration, scope: Scope): Omit<EventPayload, "level"> {
+function basePayload(
+  configuration: Configuration,
+  scope: Scope,
+): Omit<EventPayload, "level"> {
   const payload: Omit<EventPayload, "level"> = {
     event_id: randomBytes(16).toString("hex"),
     timestamp: new Date().toISOString(),
@@ -91,9 +104,10 @@ function basePayload(configuration: Configuration, scope: Scope): Omit<EventPayl
       runtime: { name: "node", version: process.version },
       ...(scope.contexts ?? {}),
     },
-    request: scope.request ?? null,
   };
   if (configuration.release) payload.release = configuration.release;
+  if (scope.transaction) payload.transaction = scope.transaction;
+  if (scope.request) payload.request = scope.request;
   return payload;
 }
 

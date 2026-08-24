@@ -9,6 +9,7 @@ export interface RequestContext {
 
 export interface Scope {
   level?: Level | string;
+  transaction?: string;
   tags?: Record<string, string>;
   extra?: Record<string, unknown>;
   contexts?: Record<string, unknown>;
@@ -38,6 +39,7 @@ export interface EventPayload {
   release?: string;
   server_name?: string;
   sdk: { name: string; version: string };
+  transaction?: string;
   tags: Record<string, string>;
   extra: Record<string, unknown>;
   contexts: Record<string, unknown>;
@@ -47,19 +49,30 @@ export interface EventPayload {
   exception?: { values: ExceptionValue[] };
 }
 
+/**
+ * Neutral log shape the appender understands. Logger adapters (pino, winston,
+ * console) translate their own record into this before enqueueing.
+ */
+export interface LogRecord {
+  time?: Date | number | string;
+  level?: string;
+  message?: string;
+  fields?: Record<string, unknown>;
+}
+
 export interface LogEntry {
   timestamp: number;
   level: string;
   message: string;
-  request_id?: string;
-  method?: string;
-  path?: string;
-  status?: number;
-  duration_ms?: number | null;
-  controller?: string;
-  action?: string;
-  environment?: string;
-  release?: string;
-  host?: string;
-  fields?: Record<string, string>;
+  request_id: string;
+  method: string;
+  path: string;
+  status: number;
+  duration_ms: number | null;
+  controller: string;
+  action: string;
+  environment: string;
+  release: string;
+  host: string;
+  fields: Record<string, string>;
 }

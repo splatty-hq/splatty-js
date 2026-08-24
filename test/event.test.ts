@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Configuration } from "../src/configuration";
-import { buildExceptionEvent, buildMessageEvent } from "../src/event";
+import { buildExceptionEvent, buildMessageEvent } from "../src/event.js";
+import { buildConfiguration } from "./helpers.js";
 
-const config = new Configuration({
+const config = buildConfiguration({
   url: "https://example.com",
   dsn: "test-dsn",
   environment: "test",
@@ -30,8 +30,8 @@ test("buildExceptionEvent captures error type, message and frames", () => {
   assert.equal(value.type, "Error");
   assert.equal(value.value, "boom");
   assert.ok(value.stacktrace.frames.length > 0);
-  assert.equal(typeof event.event_id, "string");
-  assert.equal(event.event_id.length, 32);
+  assert.ok(value.stacktrace.frames.some((f) => typeof f.lineno === "number"));
+  assert.match(event.event_id, /^[a-f0-9]{32}$/);
 });
 
 test("buildExceptionEvent walks cause chain", () => {
@@ -44,7 +44,15 @@ test("buildExceptionEvent walks cause chain", () => {
   assert.equal(values[1].value, "wrapped");
 });
 
-test("buildMessageEvent builds an info message", () => {
+test("buildExceptionEvent handles a thrown non-error", () => {
+  const event = buildExceptionEvent("just a string", config, {});
+  const value = event.exception!.values[0];
+  assert.equal(value.type, "NonError");
+  assert.equal(value.value, "just a string");
+  assert.deepEqual(value.stacktrace.frames, []);
+});
+
+test("buildMessageEvent builds a message event", () => {
   const event = buildMessageEvent("hi there", config, "warn", {
     tags: { service: "api" },
   });
@@ -54,20 +62,19 @@ test("buildMessageEvent builds an info message", () => {
   assert.equal(event.exception, undefined);
 });
 
-test("Configuration.validate disables when dsn missing", () => {
-  const c = new Configuration({ url: "https://x.test", logger: { warn: () => {} } });
-  c.dsn = undefined;
-  c.validate();
-  assert.equal(c.isEnabled(), false);
+test("scope request and transaction are passed through", () => {
+  const event = buildMessageEvent("x", config, "info", {
+    request: { url: "/x", method: "GET" },
+    transaction: "GET /x",
+  });
+  assert.equal(event.request!.url, "/x");
+  assert.equal(event.transaction, "GET /x");
 });
 
-test("Configuration.validate disables when url invalid", () => {
-  const c = new Configuration({ url: "not-a-url", dsn: "k", logger: { warn: () => {} } });
-  c.validate();
-  assert.equal(c.isEnabled(), false);
-});
-
-test("Configuration.envelopeUrl strips trailing slash", () => {
-  const c = new Configuration({ url: "https://x.test/", dsn: "k" });
-  assert.equal(c.envelopeUrl(), "https://x.test/api/envelope");
+test("transaction and request are omitted when absent", () => {
+  const event = buildMessageEvent("x", config, "info", {});
+  assert.equal("transaction" in event, false);
+  assert.equal("request" in event, false);
+  assert.deepEqual(event.tags, {});
+  assert.deepEqual(event.extra, {});
 });

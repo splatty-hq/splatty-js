@@ -1,42 +1,50 @@
 import { gzipSync } from "node:zlib";
 import { Agent as HttpAgent, request as httpRequest } from "node:http";
 import { Agent as HttpsAgent, request as httpsRequest } from "node:https";
-import { VERSION } from "./version";
-import type { Configuration } from "./configuration";
-import type { EventPayload, LogEntry } from "./types";
+import type { Socket } from "node:net";
+import { VERSION } from "./version.js";
+import type { Configuration } from "./configuration.js";
+import type { EventPayload, LogEntry } from "./types.js";
 
 export const SDK_NAME = "splatty.js";
 const KEEP_ALIVE_TIMEOUT_MS = 60_000;
 
-const httpAgent = new HttpAgent({ keepAlive: true, keepAliveMsecs: KEEP_ALIVE_TIMEOUT_MS });
-const httpsAgent = new HttpsAgent({ keepAlive: true, keepAliveMsecs: KEEP_ALIVE_TIMEOUT_MS });
-
-interface PostResult {
+export interface PostResult {
   status: number;
   body: string;
 }
 
 export class Transport {
   private readonly configuration: Configuration;
+  // Per-transport pools, so closing one client cannot tear down another's
+  // keep-alive connections.
+  private readonly httpAgent: HttpAgent;
+  private readonly httpsAgent: HttpsAgent;
 
   constructor(configuration: Configuration) {
     this.configuration = configuration;
+    this.httpAgent = new HttpAgent({
+      keepAlive: true,
+      keepAliveMsecs: KEEP_ALIVE_TIMEOUT_MS,
+    });
+    this.httpsAgent = new HttpsAgent({
+      keepAlive: true,
+      keepAliveMsecs: KEEP_ALIVE_TIMEOUT_MS,
+    });
   }
 
   async sendEnvelope(event: EventPayload): Promise<PostResult | null> {
-    const body = this.serializeEnvelope(event);
-    return this.post(body);
+    return this.post(this.serializeEnvelope(event));
   }
 
   async sendLogs(host: string, logs: LogEntry[]): Promise<PostResult | null> {
     if (!logs.length) return null;
-    const body = this.serializeLogEnvelope(host, logs);
-    return this.post(body);
+    return this.post(this.serializeLogEnvelope(host, logs));
   }
 
   close(): void {
-    httpAgent.destroy();
-    httpsAgent.destroy();
+    this.httpAgent.destroy();
+    this.httpsAgent.destroy();
   }
 
   private envelopeHeaders(contentLength: number): Record<string, string> {
@@ -86,9 +94,16 @@ export class Transport {
     const compressed = gzipSync(Buffer.from(body, "utf8"));
     const isHttps = url.protocol === "https:";
     const reqFn = isHttps ? httpsRequest : httpRequest;
-    const agent = isHttps ? httpsAgent : httpAgent;
+    const agent = isHttps ? this.httpsAgent : this.httpAgent;
 
     return new Promise((resolve) => {
+      let settled = false;
+      const finish = (result: PostResult | null) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+
       const req = reqFn(
         {
           protocol: url.protocol,
@@ -98,13 +113,12 @@ export class Transport {
           path: `${url.pathname}${url.search}`,
           headers: this.envelopeHeaders(compressed.length),
           agent,
-          timeout: this.configuration.readTimeoutMs,
         },
         (res) => {
           const chunks: Buffer[] = [];
           res.on("data", (chunk: Buffer) => chunks.push(chunk));
           res.on("end", () => {
-            resolve({
+            finish({
               status: res.statusCode ?? 0,
               body: Buffer.concat(chunks).toString("utf8"),
             });
@@ -112,16 +126,29 @@ export class Transport {
         },
       );
 
-      const fail = (err: Error) => {
+      req.on("error", (err: Error) => {
         this.logFailure(url, err);
-        resolve(null);
-      };
-
-      req.on("error", fail);
-      req.on("timeout", () => {
-        req.destroy(new Error("request timed out"));
+        finish(null);
       });
-      req.setTimeout(this.configuration.readTimeoutMs);
+
+      // Idle/read timeout.
+      req.setTimeout(this.configuration.readTimeoutMs, () => {
+        req.destroy(new Error("read timed out"));
+      });
+
+      // Connect timeout — only meaningful on a fresh socket; a pooled
+      // keep-alive socket is already connected.
+      req.on("socket", (socket: Socket) => {
+        if (!socket.connecting) return;
+        const timer = setTimeout(() => {
+          req.destroy(new Error("connection timed out"));
+        }, this.configuration.openTimeoutMs);
+        const clear = () => clearTimeout(timer);
+        socket.once("connect", clear);
+        socket.once("close", clear);
+        socket.once("error", clear);
+      });
+
       req.write(compressed);
       req.end();
     });
