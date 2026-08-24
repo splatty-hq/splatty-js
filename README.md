@@ -1,8 +1,8 @@
 # Splatty (JS)
 
-JavaScript/TypeScript client for [Splatty](https://github.com/k0va1/splatty).
+JavaScript/TypeScript client for [Splatty](https://github.com/splatty-hq/splatty).
 Captures exceptions and logs and ships them over the envelope protocol.
-Mirrors [`splatty-ruby`](https://github.com/k0va1/splatty-ruby).
+Mirrors [`splatty-ruby`](https://github.com/splatty-hq/splatty-ruby).
 
 No runtime dependencies. Every integration is duck-typed against the library it
 adapts, so installing Splatty never pulls in Express, pino, winston or BullMQ —
