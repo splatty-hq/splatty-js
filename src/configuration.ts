@@ -14,6 +14,8 @@ export interface ConfigurationOptions {
   captureUnhandled?: boolean;
   /** Send request headers verbatim instead of filtering the sensitive ones. */
   sendDefaultPii?: boolean;
+  /** Source lines to send either side of a stack frame. 0 disables. */
+  contextLines?: number;
   serverName?: string;
   openTimeoutMs?: number;
   readTimeoutMs?: number;
@@ -47,6 +49,7 @@ export class Configuration {
   captureConsole: boolean;
   captureUnhandled: boolean;
   sendDefaultPii: boolean;
+  contextLines: number;
   serverName: string | undefined;
   openTimeoutMs: number;
   readTimeoutMs: number;
@@ -67,6 +70,7 @@ export class Configuration {
     this.captureConsole = options.captureConsole ?? false;
     this.captureUnhandled = options.captureUnhandled ?? false;
     this.sendDefaultPii = options.sendDefaultPii ?? false;
+    this.contextLines = options.contextLines ?? 5;
     this.serverName = options.serverName;
     this.openTimeoutMs = options.openTimeoutMs ?? 5_000;
     this.readTimeoutMs = options.readTimeoutMs ?? 10_000;

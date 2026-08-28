@@ -73,6 +73,7 @@ integrations the config asks for. Call it once, as early in boot as you can.
 | `captureConsole` | — | `false` | Patch `console` so its output is shipped as logs |
 | `captureUnhandled` | — | `false` | Install `uncaughtException` / `unhandledRejection` handlers |
 | `sendDefaultPii` | — | `false` | Send request headers verbatim instead of filtering them |
+| `contextLines` | — | `5` | Source lines sent either side of a stack frame; `0` disables |
 | `serverName` | — | `os.hostname()` | Overrides the reported host |
 | `openTimeoutMs` | — | `5000` | Connect timeout |
 | `readTimeoutMs` | — | `10000` | Idle/read timeout |

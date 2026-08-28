@@ -4,6 +4,7 @@ import { SDK_NAME } from "./transport.js";
 import { VERSION } from "./version.js";
 import type { Configuration } from "./configuration.js";
 import type { EventPayload, Scope, StackFrame, ExceptionValue } from "./types.js";
+import { sourceContext } from "./line-cache.js";
 
 const APP_ROOT = process.cwd();
 const APP_ROOT_PREFIXES = ["/app/", `${APP_ROOT}/`];
@@ -24,7 +25,10 @@ function shortFilename(path: string | null): string | null {
 
 const FRAME_AT = /^\s*at\s+(?:(.*?)\s+\()?(.+?)(?::(\d+))(?::(\d+))?\)?$/;
 
-function parseStack(stack: string | undefined): StackFrame[] {
+function parseStack(
+  stack: string | undefined,
+  contextLines: number,
+): StackFrame[] {
   if (!stack) return [];
   const lines = stack.split("\n").slice(1);
   const frames: StackFrame[] = [];
@@ -36,23 +40,26 @@ function parseStack(stack: string | undefined): StackFrame[] {
     const lineno = m[3] ? Number(m[3]) : null;
     const colno = m[4] ? Number(m[4]) : null;
     const abs = file?.startsWith("file://") ? file.slice("file://".length) : file;
-    frames.push({
+    const frame: StackFrame = {
       filename: shortFilename(abs),
       abs_path: abs,
       function: fn,
       lineno,
       colno,
       in_app: inApp(abs),
-    });
+    };
+    const context = sourceContext(abs, lineno, contextLines);
+    if (context) Object.assign(frame, context);
+    frames.push(frame);
   }
   return frames.reverse();
 }
 
-function exceptionValue(err: Error): ExceptionValue {
+function exceptionValue(err: Error, contextLines: number): ExceptionValue {
   return {
     type: err.name || "Error",
     value: typeof err.message === "string" ? err.message : String(err.message),
-    stacktrace: { frames: parseStack(err.stack) },
+    stacktrace: { frames: parseStack(err.stack, contextLines) },
   };
 }
 
@@ -70,14 +77,14 @@ function nonErrorValue(current: unknown): ExceptionValue {
   return { type: "NonError", value, stacktrace: { frames: [] } };
 }
 
-function exceptionChain(err: unknown): ExceptionValue[] {
+function exceptionChain(err: unknown, contextLines: number): ExceptionValue[] {
   const chain: ExceptionValue[] = [];
   const seen = new Set<unknown>();
   let current: unknown = err;
   while (current && !seen.has(current)) {
     seen.add(current);
     if (current instanceof Error) {
-      chain.unshift(exceptionValue(current));
+      chain.unshift(exceptionValue(current, contextLines));
       current = (current as Error & { cause?: unknown }).cause;
     } else {
       chain.unshift(nonErrorValue(current));
@@ -119,7 +126,7 @@ export function buildExceptionEvent(
   return {
     ...basePayload(configuration, scope),
     level: String(scope.level ?? "error"),
-    exception: { values: exceptionChain(err) },
+    exception: { values: exceptionChain(err, configuration.contextLines) },
   };
 }
 

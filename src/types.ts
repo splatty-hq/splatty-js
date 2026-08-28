@@ -23,6 +23,9 @@ export interface StackFrame {
   lineno: number | null;
   colno?: number | null;
   in_app: boolean;
+  pre_context?: string[];
+  context_line?: string;
+  post_context?: string[];
 }
 
 export interface ExceptionValue {

@@ -34,6 +34,34 @@ test("buildExceptionEvent captures error type, message and frames", () => {
   assert.match(event.event_id, /^[a-f0-9]{32}$/);
 });
 
+test("buildExceptionEvent attaches source context to frames", () => {
+  const error = new Error("boom");
+  const event = buildExceptionEvent(error, config, {});
+  const frames = event.exception!.values[0]!.stacktrace.frames;
+  const frame = frames[frames.length - 1]!;
+
+  assert.match(frame.abs_path ?? "", /event\.test\.ts$/);
+  assert.equal(frame.context_line?.trim(), 'const error = new Error("boom");');
+  assert.equal(frame.pre_context?.length, 5);
+  assert.equal(frame.post_context?.length, 5);
+  assert.match(frame.post_context?.[0] ?? "", /buildExceptionEvent\(error, config/);
+});
+
+test("contextLines: 0 leaves frames bare", () => {
+  const bare = buildConfiguration({
+    url: "https://example.com",
+    dsn: "test-dsn",
+    contextLines: 0,
+  });
+  const event = buildExceptionEvent(new Error("boom"), bare, {});
+
+  for (const frame of event.exception!.values[0]!.stacktrace.frames) {
+    assert.equal(frame.context_line, undefined);
+    assert.equal(frame.pre_context, undefined);
+    assert.equal(frame.post_context, undefined);
+  }
+});
+
 test("buildExceptionEvent walks cause chain", () => {
   const root = new Error("root");
   const wrapped = new Error("wrapped", { cause: root });
