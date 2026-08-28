@@ -1,6 +1,6 @@
 {
   "name": "splatty",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "JavaScript/TypeScript client for Splatty. Captures exceptions and logs and ships them over the envelope protocol.",
   "keywords": [
     "splatty",
